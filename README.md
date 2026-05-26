@@ -1,113 +1,102 @@
-# CI/CD Pipeline in Jenkins - Hello Spencer
+Dokumentation
+Projekt: einfache Python Flask API mit Jenkins CI/CD Pipeline.
 
-Dieses Projekt ist eine kleine Flask-API fuer die Jenkins-CI/CD-Uebung.
-Die Pipeline enthaelt die geforderten Schritte:
+Die API ist erreichbar unter:
 
-1. Source: Repository wird von GitHub ausgecheckt.
-2. Build: Docker-Image der Applikation wird gebaut.
-3. Test: Unit-Tests laufen im gebauten Docker-Image.
-4. Deployment: Die Anwendung wird lokal als Docker-Container gestartet.
-5. Integration Test: Die laufende API wird ueber `/api/hello` getestet.
+http://localhost:5556/api/hello
 
-## Anwendung lokal starten
+Sie liefert eine JSON-Antwort mit:
 
-```powershell
-docker build -t hello-spencer:local .
-docker rm -f hello-spencer
-docker run -d --name hello-spencer -p 5556:5556 hello-spencer:local
-curl http://localhost:5556/api/hello
-```
+message: Hello Spencer
+counter: wird bei jedem Aufruf erhöht
+status: success
 
-Erwartete Antwort:
+Pipeline Ablauf
 
-```json
-{
-  "counter": 1,
-  "message": "Hello Spencer",
-  "status": "success"
-}
-```
+Source → Build → Test → Deployment
 
-## Tests lokal ausfuehren
+Source
 
-Ohne lokale Python-Abhaengigkeiten:
+Jenkins holt den Source Code aus dem GitHub Repository.
 
-```powershell
-docker build -t hello-spencer:test .
-docker run --rm hello-spencer:test python -m pytest tests/test_hello.py -v
-```
+Build
 
-Integrationstest gegen einen laufenden Container:
+Docker baut aus dem Projekt ein Image.
 
-```powershell
-docker run --rm --network container:hello-spencer hello-spencer:test python tests/test_api.py
-```
+Befehl in der Pipeline:
 
-## Jenkins einrichten
+docker build -t "$IMAGE_NAME" .
 
-Jenkins mit Docker-Socket starten:
+Test
 
-```powershell
-docker volume create jenkins_home
-docker run -u root -d --name jenkins -p 8080:8080 -p 50000:50000 -v jenkins_home:/var/jenkins_home -v /var/run/docker.sock:/var/run/docker.sock jenkins/jenkins:latest
-```
+Die Unit-Tests werden im Docker-Container ausgeführt.
 
-Initiales Admin-Passwort auslesen:
+Befehl in der Pipeline:
 
-```powershell
-docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
-```
+docker run --rm "$IMAGE_NAME" python -m pytest tests/test_hello.py -v
 
-Danach in Jenkins unter `http://localhost:8080`:
+Deployment
 
-1. Suggested Plugins installieren.
-2. Admin-User anlegen.
-3. Zusaetzlich Docker-relevante Plugins installieren, falls sie nicht vorhanden sind.
-4. Pruefen, ob Docker im Jenkins-Container verfuegbar ist:
+Die Anwendung wird lokal als Docker-Container gestartet.
 
-```powershell
-docker exec -it jenkins bash
+Befehl in der Pipeline:
+
+docker run -d --name "$APP_NAME" -p "$APP_PORT:$APP_PORT" "$IMAGE_NAME"
+
+Integration Test
+
+Nach dem Deployment testet Jenkins die laufende API.
+
+Befehl in der Pipeline:
+
+docker run --rm --network "container:$APP_NAME" "$IMAGE_NAME" python tests/test_api.py
+
+Verwendete Dateien
+
+Jenkinsfile
+Dockerfile
+requirements.txt
+src/hello.py
+tests/test_hello.py
+tests/test_api.py
+
+Jenkins Setup
+
+Jenkins wurde als Docker-Container gestartet.
+
+Dabei wurde der Docker-Socket vom Host eingebunden, damit Jenkins Docker-Befehle ausführen kann.
+
+Jenkins läuft unter:
+
+http://localhost:8080
+
+Im Jenkins-Container wurde Docker geprüft mit:
+
 docker --version
-```
 
-Falls `docker: command not found` erscheint, im Jenkins-Container die Docker-CLI installieren:
+Jenkins Job
 
-```bash
-apt-get update
-apt-get install -y ca-certificates curl gnupg lsb-release
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
-apt-get update
-apt-get install -y docker-ce-cli
-```
+In Jenkins wurde ein Pipeline Job erstellt.
 
-## Jenkins Pipeline Job
+Name: hello-spencer-pipeline
+Typ: Pipeline
+Definition: Pipeline script from SCM
+SCM: Git
+Repository: GitHub Repository
+Branch: main
+Script Path: Jenkinsfile
 
-1. In Jenkins `New Item` waehlen.
-2. `Pipeline` auswaehlen.
-3. Unter `Build Triggers` optional `GitHub hook trigger for GITScm polling` aktivieren.
-4. Unter `Pipeline` die Option `Pipeline script from SCM` waehlen.
-5. SCM: `Git`.
-6. Repository URL: eigenes GitHub-Repository eintragen.
-7. Branch: `main`.
-8. Script Path: `Jenkinsfile`.
-9. Speichern und `Build Now` ausfuehren.
+Ergebnis
 
-Fuer automatische Builds nach GitHub-Commits brauchst du zusaetzlich einen GitHub Webhook:
+Der Jenkins Build läuft erfolgreich durch.
 
-- Payload URL: `http://<deine-jenkins-url>/github-webhook/`
-- Content type: `application/json`
-- Event: `Just the push event`
+Source: erfolgreich
+Build: erfolgreich
+Test: erfolgreich
+Deployment: erfolgreich
+Integration Test: erfolgreich
 
-Bei lokalem Jenkins auf dem Notebook ist ein echter GitHub-Webhook nur moeglich, wenn Jenkins von GitHub erreichbar ist, zum Beispiel ueber ngrok oder einen Server.
+Die Anwendung läuft danach lokal als Docker-Container.
 
-## Brauche ich eine zweite Person?
-
-Technisch brauchst du keine zweite Person, um Jenkins, Docker, Tests und Deployment umzusetzen.
-In der Bewertung steht aber `Gruppengroesse: 2 Personen`. Das ist organisatorisch gemeint: Die Abgabe soll vermutlich in Zweiergruppen erfolgen. Wenn du alleine abgeben willst, solltest du kurz bei der Lehrperson nachfragen.
-
-Sinnvolle Aufteilung in einer Zweiergruppe:
-
-- Person 1: Jenkins Setup, GitHub Webhook, Pipeline-Konfiguration.
-- Person 2: Flask-App, Unit-Tests, Dockerfile, Deployment-Test.
+Container: hello-spencer
+Port: 5556:5556

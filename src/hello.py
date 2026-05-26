@@ -22,7 +22,7 @@ def hello_spencer():
     counter = next_counter_value()
 
     return jsonify({
-        "message": "Hello wimmer",
+        "message": "Hello oliver",
         "counter" : counter,
         "status": "success"
     })
