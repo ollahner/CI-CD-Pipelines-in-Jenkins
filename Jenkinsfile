@@ -1,74 +1,69 @@
 pipeline {
-    agent {
-        docker { 
-            image 'python:3.11' 
-            args '-p 5556:5556'
-        }
-    }
+    agent any
+
     environment {
+        APP_NAME = 'hello-spencer'
         APP_PORT = '5556'
-        GITHUB_REPO = 'https://github.com/ThomasMicheler/DEZSYS_JENKINS_HELLOSPENCER.git'
+        IMAGE_NAME = "hello-spencer:${env.BUILD_NUMBER}"
     }
+
     stages {
-        stage('Pre-Build Cleanup') {
+        stage('Source') {
             steps {
-                // Kill any existing Flask processes
-                sh 'pkill -f "python hello.py" || true'
+                checkout scm
+                sh 'git --no-pager log -1 --oneline'
             }
         }
-        stage('Checkout') {
-            steps {
-                cleanWs()
-                git branch: 'main', url: "${GITHUB_REPO}"
-            }
-        }
+
         stage('Build') {
             steps {
-                sh '''
-                    python -m pip install --upgrade pip
-                    pip install flask
-                    pip install requests
-                    pip install pytest
-                    if [ ! -f count.txt ]; then
-                        echo "0" > count.txt
-                    fi
-                    chmod 666 count.txt
-                '''
+                sh 'docker build -t "$IMAGE_NAME" .'
             }
         }
+
         stage('Test') {
             steps {
+                sh 'docker run --rm "$IMAGE_NAME" python -m pytest tests/test_hello.py -v'
+            }
+        }
+
+        stage('Deployment') {
+            steps {
                 sh '''
-                    # Run the unit tests
-                    python -m pytest tests/test_hello.py -v
+                    docker rm -f "$APP_NAME" || true
+                    docker run -d \
+                        --name "$APP_NAME" \
+                        --restart unless-stopped \
+                        -p "$APP_PORT:$APP_PORT" \
+                        -e APP_PORT="$APP_PORT" \
+                        "$IMAGE_NAME"
                 '''
             }
         }
-        stage('Run') {
+
+        stage('Integration Test') {
             steps {
                 sh '''
-                    nohup python src/hello.py > app.log 2>&1 &
-                    sleep 5
-                    curl http://localhost:5556/api/hello
+                    for i in $(seq 1 15); do
+                        if docker run --rm --network "container:$APP_NAME" "$IMAGE_NAME" \
+                            python tests/test_api.py; then
+                            exit 0
+                        fi
+                        sleep 2
+                    done
+                    docker logs "$APP_NAME"
+                    exit 1
                 '''
-            }
-        }
-        stage('Test API') {
-            steps {
-                sh 'python tests/test_api.py'
-            }
-        }
-        stage('Keep Alive') {
-            steps {
-                // Keep the container running indefinitely
-                sh 'sleep infinity'
             }
         }
     }
+
     post {
-        always {
-            // Cleanup: Stop the Flask application
-            sh 'pkill -f "python src/hello.py" || true'
+        failure {
+            sh 'docker logs "$APP_NAME" || true'
+        }
+        success {
+            echo "Deployment is running on port ${APP_PORT} in Docker container ${APP_NAME}."
         }
     }
 }

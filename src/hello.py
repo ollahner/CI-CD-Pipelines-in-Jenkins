@@ -1,18 +1,25 @@
+import os
+from pathlib import Path
+
 from flask import Flask, jsonify
 
-# Initialize Flask application
 app = Flask(__name__)
+COUNT_FILE = Path("count.txt")
+APP_PORT = int(os.environ.get("APP_PORT", "5556"))
 
-# Define the API endpoint
+
+def next_counter_value():
+    if not COUNT_FILE.exists():
+        COUNT_FILE.write_text("0", encoding="utf-8")
+
+    counter = int(COUNT_FILE.read_text(encoding="utf-8").strip() or "0") + 1
+    COUNT_FILE.write_text(str(counter), encoding="utf-8")
+    return counter
+
+
 @app.route('/api/hello', methods=['GET'])
 def hello_spencer():
-    f = open("count.txt","r")
-    counter = int(f.read())
-    f.close()
-    counter += 1
-    f = open("count.txt","w")
-    f.write(str(counter))
-    f.close()
+    counter = next_counter_value()
 
     return jsonify({
         "message": "Hello Spencer",
@@ -20,6 +27,6 @@ def hello_spencer():
         "status": "success"
     })
 
-# Run the application
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5556)
+    app.run(debug=False, host='0.0.0.0', port=APP_PORT)

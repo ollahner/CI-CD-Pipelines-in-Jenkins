@@ -1,13 +1,12 @@
-# tests/test_api.py
+import os
 import unittest
 import requests
-import json
 from urllib.parse import urljoin
 
 class TestAPIEndpoints(unittest.TestCase):
     def setUp(self):
         """Set up test case with API configuration."""
-        self.base_url = "http://localhost:5556"  # Replace with your API's IP if different
+        self.base_url = os.environ.get("API_BASE_URL", "http://localhost:5556")
         self.headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -21,7 +20,8 @@ class TestAPIEndpoints(unittest.TestCase):
         """Test the /api/hello endpoint returns correct data."""
         response = requests.get(
             self.get_url('/api/hello'),
-            headers=self.headers
+            headers=self.headers,
+            timeout=5
         )
 
         # Test status code
@@ -39,7 +39,8 @@ class TestAPIEndpoints(unittest.TestCase):
         """Test that API responds within acceptable time limit."""
         response = requests.get(
             self.get_url('/api/hello'),
-            headers=self.headers
+            headers=self.headers,
+            timeout=5
         )
         self.assertLess(response.elapsed.total_seconds(), 1.0)  # Response should be under 1 second
 
